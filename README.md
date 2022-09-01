@@ -38,13 +38,13 @@ The bot permissions that have been used for other instances of ARB are listed be
   * Add Reactions
   * Use Slash Commands
 
+Once the bot application has been created and added to the server, make a note of the bot token. This token will be add
+
 ### Voice Permissions
   * Mute Members
   * Deafen Members
   * Move Members
-  * Use Voice Activity
-
-Once the bot application has been created and added to the server, make a note of the bot token. This token will be added to the bot_tokens.py file when deploying the bot as described in the Bot Config section below. Please note, however, that you SHOULD NEVER ADD THIS TOKEN TO A FILE BEING COMMITTED TO GITHUB. This will publish your token for all the world to see. Conveniently, Discord has added a feature that scans for bot tokens and will disable your bot if you do this. It's then a pain to re-generate and update the config, so save yourself a headache and just don't do it to begin with.
+  * Use Voice Activityed to the bot_tokens.py file when deploying the bot as described in the Bot Config section below. Please note, however, that you SHOULD NEVER ADD THIS TOKEN TO A FILE BEING COMMITTED TO GITHUB. This will publish your token for all the world to see. Conveniently, Discord has added a feature that scans for bot tokens and will disable your bot if you do this. It's then a pain to re-generate and update the config, so save yourself a headache and just don't do it to begin with.
 
 If you are looking to develop features for ARB, it is recommended to create a second bot application for testing purposes. Configuration of ARB includes the ability to run in test mode which will run the bot with a test bot token and run/respond in a separate test server.
 
@@ -70,13 +70,52 @@ When updates are published to ARB, you can grab the latest changes without losin
   3. Change back to your server info branch and use the rebase command to merge in the changes from master: `git checkout <branch_name> && git rebase master`
 
 ### Config.py
-*TBD Add detail about how to edit config.py*
+Config.py has a few options and fields that should be reviewed before launching ARB.
+  | Field | Description | Example/Format |
+  | -------------- | ------------- | -------------- |
+  | PRODUCTION_DB | Name of the production database to use. Should be in the same directory as the main bot file `async_race_bot.py` | "AsyncRaceInfo.db" |
+  | TEST_DB | Name of the database to use in test mode. Should be in the same directory as the main bot file `async_race_bot.py` | "testDbUtil.db" |
+  | TEST_MODE | Flag that controls whether the bot is started in test mode | True or False |
+  | RtaIsPrimary | Flag that controls whether leaderboards should be sorted by in-game time (IGT) or real time (RTA) | True or False |
+  | SuggestNextWeeklyMode | If True, the submission modal will include a field for the user to suggest the next weekly mode | True or False |
+  | CoolestGuyIds | Python list of discord IDs corresponding to the users who are authorized to use the really sensitive features like text_talk which allows the user to talk as the bot | `[ 178293242045923329, 853066341502156870 ]` |
+  | cogs | This is the list of cogs to be loaded when the bot is started up. Server utils contains VC create/destroy functionality, async_handler contains async race and misc functions | `[ 'cogs.async_handler', 'cogs.server_utils' ]` |
+
+Example sqlite database files are provided for the production and test database that contain the required tables/fields. You can create your own, referencing the table names/layout in `async_db_orm.py`
 
 ### Server Info
-*TBD Add detail about how to fill in server info*
+There is also some server specific information that needs to be added to async_handler.py. The ServerInfo class contains comments describing each field and an example of a filled-in instance of this class follows the class definition along with a comment about how to add that instance to the `SupportedServerList`. All channel, user and role IDs are discord IDs. The easiest way to get these IDs is to use the desktop Discord application, right click on the user/channel/role in question and select `Copy Id`.
 
 ### Bot Tokens
-*TBD add detail about bot_tokens.py*
+There is one required file that is explicitly NOT included in this repository and will need to be manually created to run ARB. This file should be named bot_tokens.py and will contain two variables with the bot tokens of your Discord production and test bot applications. These can be the same token if you don't plan to do any development work. It is mentioned above, but bears repeating: DO NOT ADD bot_tokens.py TO THE GIT REPO. This will potentially publish your secret bot tokens for all the world to see. The following is an example of what the contents of bot_tokens.py should look like:
+```
+PRODUCTION_TOKEN = 'ThisIsAFakeProductionBotToken__ASF^D&*FASHR!(*HKLFASFJKLhjfsahjk'
+TEST_TOKEN = 'ThisIsAFakeTestBotToken_ItCanBeTheSameOne_FASHKJLFASJL:ujlksfa'
+```
 
-## Server Hosting
-*TBD Add info about server hosting and running the bot (in both production and test modes, locally and on hosting server)*
+## Server Hosting & Launching ARB
+### Running Locally
+ARB can be run locally from a command prompt. This is useful for testing configuration setup and if doing feature development or bug fixing. These instructions assume running on Windows. ARB should run just fine on another OS that supports Python and the required libraries, and if you're on one of those I'm going to assume you can figure it out with this info anyway.
+
+  1. [Install Python](https://www.python.org/downloads/). You don't need the absolute latest version, as long as it's 3.6 or above you should be fine.
+  2. Install the required python packages. You'll want to open a command prompt or git bash window and run the following command for each required package, for example `pip install nextcord`
+     * nextcord
+     * nextcord.ext
+     * logging
+     * prettytable
+     * datetime
+     * random
+     * peewee
+  3. From the root of the ARB repo (e.g. /c/git/async_race_bot/) run: `python async_race_bot.py`
+  4. The bot should now be running, any log or error messages will be displayed on the terminal. To stop the bot use Ctrl-C. This is sometimes delayed, you can speed it up by sending any message in a discord channel the bot listens to.
+
+### Remote Hosting
+This section describes how I have hosted ARB to run in the past. There are *many* other options for hosting a discord bot, so feel free to shop around. I use [PebbleHost](https://pebblehost.com/bot-hosting) for hosting and have been satisfied with their service. It is currently $3 US per month for hosting. Once an account has been created with a server, you'll first want to Select Languages & Preinstalls and select the Python Bot option. Next, go to File Manager and upload the following files from your local repo:
+  * async_db_orm.py
+  * async_race_bot.py
+  * <PRODUCTION DB> (e.g. AsyncRaceInfo.db)
+  * bot_tokens.py
+  * config.py (don't forget to change TEST_MODE to False when deploying for production)
+  * the cogs folder
+
+Once the files are uploaded you should next go to Python Package Manager and copy the list of required packages from the Running Locally section to the requirements.txt displayed. Finally, back on the main server page, enter `async_race_bot.py` in the Start File field. You can now click the Start button to launch the bot. The Console page is useful to see bot output.
