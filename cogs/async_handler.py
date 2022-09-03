@@ -47,17 +47,32 @@ class ServerInfo(NamedTuple):
 BttServerInfo = ServerInfo(
     server_id = 853060981528723468,
     race_creator_role = 888940865337299004,
-    weekly_submit_channel = 892861800612249680,
-    weekly_category_id = 1,
+    weekly_submit_channel = 0,
+    weekly_category_id = 0,
     tourney_submit_channel = 952612873534836776,
     race_creator_channel = 896494916493004880,
     bot_command_channels = [ 853061634855665694, 854508026832748544, 896494916493004880 ],
-    weekly_race_done_role = 895026847954374696,
-    weekly_leaderboard_channel = 895681087701909574,
-    announcements_channel = 896494916493004880,
-    weekly_racer_role = 931946945562423369,
+    weekly_race_done_role = 0,
+    weekly_leaderboard_channel = 0,
+    announcements_channel = 0,
+    weekly_racer_role = 0)
+
+FortyBonksTourneyInfo = ServerInfo(
+    server_id = 828666862798635049,
+    race_creator_role = 828671253342715924,
+    weekly_submit_channel = 0,
+    weekly_category_id = 0,
+    tourney_submit_channel = 1015717682051563561,
+    race_creator_channel = 1015725462896509119,
+    bot_command_channels = [ 1015725462896509119, 1015717682051563561 ],
+    weekly_race_done_role = 0,
+    weekly_leaderboard_channel = 0,
+    announcements_channel = 0,
+    weekly_racer_role = 0)
 
 SupportedServerList = [ BttServerInfo.server_id ]
+if not config.TEST_MODE:
+     SupportedServerList = [ FortyBonksTourneyInfo.server_id ]
 
 # To add a supported server, create a ServerInfo structure then override the list like so:
 #if not config.TEST_MODE:
@@ -116,8 +131,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
     def __init__(self, bot):
         self.bot = bot
         self.test_mode = False
-        # Once server info is defined, it should be set here as follows:
-        # self.server_info = FortyBonksServerInfo
+        self.server_info = FortyBonksTourneyInfo
         if config.TEST_MODE:
             self.setTestMode()
         self.pt = PrettyTable()
