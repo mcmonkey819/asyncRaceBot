@@ -152,7 +152,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
             self.igt = nextcord.ui.TextInput(
                 label="Enter IGT in format `H:MM:SS`",
-                required=not config.RtaIsPrimary
+                required=not config.RtaIsPrimary,
                 min_length=7,
                 max_length=8)
 
@@ -705,11 +705,14 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
     ####################################################################################################################
     # Queries the most recent, active weekly async race ID
     def queryLatestWeeklyRaceId(self):
-        return AsyncRace.select()                                                                               \
-                        .where(AsyncRace.category_id == self.server_info.weekly_category_id & AsyncRace.active) \
-                        .order_by(AsyncRace.id.desc())                                                          \
-                        .get()                                                                                  \
-                        .id
+        race_id = 0
+        if self.server_info.weekly_category_id != 0:
+            race_id =  AsyncRace.select()                                                                               \
+                                .where(AsyncRace.category_id == self.server_info.weekly_category_id & AsyncRace.active) \
+                                .order_by(AsyncRace.id.desc())                                                          \
+                                .get()                                                                                  \
+                                .id
+        return race_id
 
     ####################################################################################################################
     # Builds the leaderboard message list for a specific race ID
@@ -1160,6 +1163,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             return
 
         if race_id is not None:
+            await interaction.response.defer()
             await self.start_race_impl(interaction, race_id)
         else:
             race_select_view = AsyncHandler.RaceSelectView(self.start_race_impl)
@@ -1459,12 +1463,14 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
     async def close(self):
         logging.info("Shutting down Async Handler")
-        # Remove any existing submit messages/buttons in the weekly submit channel. Tourney async messages/buttons will
-        # be left orphaned.
-        # TODO - Figure out a way to identify tourney async messages to remove them here as well
+        # Remove any existing submit messages/buttons in the weekly and tourney submit channels. Async messages pinned
+        # in other channels will be orphaned
         if self.server_info.weekly_submit_channel != 0:
             weekly_submit_channel = self.bot.get_channel(self.server_info.weekly_submit_channel)
-            await weekly_submit_channel.purge()
+            await self.purge_bot_messages(weekly_submit_channel)
+        if self.server_info.tourney_submit_channel != 0:
+            tourney_channel = self.bot.get_channel(self.server_info.tourney_submit_channel)
+            await self.purge_bot_messages(tourney_channel)
 
 ########################################################################################################################
 # REACTION ADD HANDLER
