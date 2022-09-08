@@ -53,3 +53,33 @@ class AsyncSubmission(Model):
     class Meta:
         table_name = 'async_submissions'
         database = db
+
+class RaceRoster(Model):
+    id = IntegerField(primary_key=True)
+    race_id = IntegerField()
+    user_id = IntegerField()
+
+    class Meta:
+        table_name = 'async_race_rosters'
+        database = db
+
+####################################################################################################################
+# Checks the database for the required tables, creating them if they don't exist.
+def check_add_db_tables():
+    logging.info("Checking DB tables")
+    tables = db.get_tables()
+
+    if 'race_categories' not in tables:
+        RaceCategory.create_table()
+
+    if 'async_races' not in tables:
+        AsyncRace.create_table()
+
+    if 'async_racers' not in tables:
+        AsyncRacer.create_table()
+
+    if 'async_submissions' not in tables:
+        AsyncSubmission.create_table()
+
+    if 'async_race_rosters' not in tables:
+        RaceRoster.create_table()
