@@ -49,6 +49,7 @@ class AsyncSubmission(Model):
     collection_rate = IntegerField()
     next_mode = CharField(null=True)
     comment = CharField(null=True)
+    vod_link = CharField(null=True)
 
     class Meta:
         table_name = 'async_submissions'
@@ -58,6 +59,7 @@ class RaceRoster(Model):
     id = IntegerField(primary_key=True)
     race_id = IntegerField()
     user_id = IntegerField()
+    race_info_time = DateTimeField(null=True)
 
     class Meta:
         table_name = 'async_race_rosters'
@@ -66,7 +68,6 @@ class RaceRoster(Model):
 ####################################################################################################################
 # Checks the database for the required tables, creating them if they don't exist.
 def check_add_db_tables():
-    logging.info("Checking DB tables")
     tables = db.get_tables()
 
     if 'race_categories' not in tables:
