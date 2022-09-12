@@ -1,0 +1,26 @@
+To create a new assigned async race, first add the race. Make sure you select "No" for the start_race option in the command:
+    `/async_race manage add start_race: No`
+
+The bot will prompt you for the required info. It's recommended that you include the racer names in the additional info field. Once the form is submitted, the bot will output the ID of the race created:
+    `Added race ID: 62`
+
+Next, you can assign racers, the user field is searchable so you can click on "user" and then start typing the name of the person you want to assign. Provide the race id from the add command:
+    `/async_race manage assign user: John Snuu race_id: 62`
+
+You can view the current race info. This includes assigned racers and whether they've started (gotten the seed) or submitted (submitted a time). As a race creator, this command will include whether the race is active. Use the command:
+    `/async_race info 62`
+
+If you need to edit the race details you can do so with:
+    `/async_race manage edit race_id: 62`
+
+When you're ready to start the async race, use the start command. This will post a message and ping assigned racers in the async channel:
+    `/async_race manage start race_id: 62`
+
+If you accidentally started a race too soon, you can mark it as inactive again with the pause command. NOTE: if the assigned racers are quick they can run the race info command between the start and pause, should use race info command to see if the racers have gotten the seed or not yet
+    `/async_race manage pause race_id: 62`
+
+Racers can get the seed by using the same race info command from the async channel. The bot's reply will be an ephemeral message which means it will only be visible to the user who ran the command. This includes the assigned racers and whether they have started or submitted for the race:
+    `/async_race info 62`
+
+When all racers have completed the race, the results will be automatically posted by the bot. If a racer decides to forfeit and neglects to use the async_race info command and click the FF button, the race can be manually ended by a mod by using the end race command. This will fill in a FF for any racers who have not yet submitted a time and then post the results:
+    `/async_race manage end 62
