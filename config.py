@@ -6,7 +6,7 @@ TEST_DB = "testDbUtil.db"
 TEST_MODE = True
 
 # Controls whether leaderboards should be sorted by IGT or RTA
-RtaIsPrimary = False
+RtaIsPrimary = True
 
 # If True, the submission form will include a field for the user to suggest the next weekly mode.
 SuggestNextWeeklyMode = True
