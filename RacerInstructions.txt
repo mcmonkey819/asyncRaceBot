@@ -1,0 +1,9 @@
+So you want to run one of your tourney races async? Not a problem! We've got a bot helper for that, here's what you'll need to do:
+  1. Reach out to a tourney admin or mod or ping the @Mods role and let them know who will be doing the async race
+  2. A mod will create the race and assign you to it, when it's all ready to go you'll get a ping in the #async-races channel that looks like this:
+  3. When you're ready to run your race, type the quoted command to get the link to your seed. The bot will keep track of when you request the seed, so make sure you are ready to go and run it right away.
+  4. In the race information displayed, you might see `[started]` or `[submitted]` next to your opponent's name. `[submitted]` means they have submitted time and are done. You are free to stream the seed if your opponent displays as `[submitted]`, otherwise you will have to local record and upload to YouTube or similar to provide a VoD link.
+  5. When you're done you can use the Submit button displayed after the `async_race info` command, or if that message has disappeared just run the same command again to re-display them. The submit form will include a required field for your race VoD. There is also a FF button if you decide not to complete the seed.
+  6. When both racers have submitted a time or FF'd, the bot will post the results in the async-races channel and ping each racer and the mods so they can log the result.
+
+If you have any questions about the process please reach out to one of the mods or admins. If you have any technical issues with the bot, please reach out to the resident @Bot Overlord.  Happy Racing!

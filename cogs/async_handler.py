@@ -8,64 +8,8 @@ import asyncio
 from datetime import datetime, date
 from async_db_orm import *
 from enum import Enum
-from typing import NamedTuple
 import config
-
-# Collection of information about a supported server.
-class ServerInfo(NamedTuple):
-    # Global Info - Unless otherwise noted these fields are required
-    server_id: int
-    race_creator_role: int
-    race_creator_channel: int
-    bot_command_channels: list[int]
-
-    # Weekly Async Info
-    #-------------------
-    # This is the channel where the seed link and submit, FF, Leaderboard buttons will be displayed.
-    # This field is required for weekly async support
-    weekly_submit_channel: int
-    # This is the database race category ID for the weekly races. This category is treated special
-    weekly_category_id: int
-    # This field is optional. If populated (non-zero) the leaderboard for the current active race will be displayed
-    # here and updated with each new submission
-    weekly_leaderboard_channel: int
-    # The following two fields are optional. If populated (non-zero) an announcement will be posted in this channel when a new weekly race is started
-    # If the role is populated (non-zero) it will be pinged when the announcement is posted.
-    announcements_channel: int
-    weekly_racer_role: int
-    # This field is optional. If populated (non-zero) this role will be given to a user after submitting or FF from the current race.
-    # This can be used to control access to a spoiler channel for users who have completed the seed
-    weekly_race_done_role: int
-
-    # Tourney Async Info
-    #--------------------
-    # This is the channel where the seed link and submit, FF, Leaderboard buttons will be displayed for the active races. 
-    # This field is required for tourney async support
-    tourney_submit_channel: int
-    # This is the channel where tournament async races will be conducted. Racers can submit results here and results will be posted here.
-    tourney_async_channel: int
-
-# Bot Testing Things Server Info
-BttServerInfo = ServerInfo(
-    server_id = 853060981528723468,
-    race_creator_role = 888940865337299004,
-    weekly_submit_channel = 892861800612249680,
-    weekly_category_id = 1,
-    tourney_submit_channel = 952612873534836776,
-    race_creator_channel = 896494916493004880,
-    bot_command_channels = [ 853061634855665694, 854508026832748544, 896494916493004880 ],
-    weekly_race_done_role = 895026847954374696,
-    weekly_leaderboard_channel = 895681087701909574,
-    announcements_channel = 896494916493004880,
-    weekly_racer_role = 931946945562423369,
-    tourney_async_channel = 1017513696190287953)
-
-SupportedServerList = [ BttServerInfo.server_id ]
-
-# To add a supported server, create a ServerInfo structure then override the list like so:
-#if not config.TEST_MODE:
-#     SupportedServerList = [ FortyBonksServerInfo.server_id ]
-# Adding multiple servers to the list is NOT supported, it is formatted as a list to match nextcord interface. The AsyncHandler class assumes a single supported server at a time, set by the server_info class field
+from server_info import *
 
 # Discord limit is 2000 characters, subtract a few to account for formatting, newlines, etc
 DiscordApiCharLimit = 2000 - 10
@@ -181,6 +125,12 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 min_length=1,
                 max_length=1024)
 
+            self.vod_link = nextcord.ui.TextInput(
+                    label="VoD Link",
+                    required=True,
+                    min_length=1,
+                    max_length=1024)
+
             if submitType is not AsyncHandler.SubmitType.FORFEIT:
                 self.add_item(self.igt)
                 self.add_item(self.collection_rate)
@@ -189,11 +139,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             if isWeeklyAsync and config.SuggestNextWeeklyMode:
                 self.add_item(self.next_mode)
             if not self.asyncHandler.is_public_race(race_id):
-                self.vod_link = nextcord.ui.TextInput(
-                    label="VoD Link",
-                    required=True,
-                    min_length=1,
-                    max_length=1024)
                 self.add_item(self.vod_link)
 
         async def callback(self, interaction: nextcord.Interaction) -> None:
@@ -882,6 +827,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             cr_int = "216" if modal.collection_rate.value is None else modal.collection_rate.value
             comment = modal.comment.value
             next_mode = modal.next_mode.value
+            vod_link = modal.vod_link.value
 
             # A parse_error occurred if a required time is missing or an invalid non-empty time is submitted
             parse_error = False
@@ -916,7 +862,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 # Create a brand new submission
                 submission = AsyncSubmission(race_id= race_id, user_id= user_id, username= interaction.user.name,
                                              finish_time_igt= igt, collection_rate= cr_int, finish_time_rta=rta,
-                                             comment=comment, next_mode=next_mode)
+                                             comment=comment, next_mode=next_mode, vod_link=vod_link)
             else:
                 # Update the fields of the existing submission
                 submission.finish_time_igt= igt
@@ -924,6 +870,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 submission.finish_time_rta=rta
                 submission.comment=comment
                 submission.next_mode=next_mode
+                submission.vod_link = vod_link
 
             submission.submit_date = datetime.now().isoformat(timespec='minutes').replace('T', ' ')
             submission.save()
@@ -1289,6 +1236,8 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                         if assignment.race_info_time is None:
                             assignment.race_info_time = datetime.now().isoformat(timespec='minutes').replace('T', ' ')
                             assignment.save()
+            else:
+                await interaction.send("You do not have permission to view this race info in this channel", ephemeral=True)
 
 ########################################################################################################################
 ########################################################################################################################
@@ -1499,7 +1448,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 # REMOVE_RACE
 ########################################################################################################################
     @manage.subcommand(description="Remove Async Race")
-    async def remove(self, interaction, race_id: int = nextcord.SlashOption(description="Race to Remove"),):
+    async def remove(self, interaction, race_id: int = nextcord.SlashOption(description="Race to Remove")):
 
         self.log_command(interaction.user, "REMOVE_RACE")
         if not self.checkRaceCreatorCommand(interaction):
@@ -1577,6 +1526,51 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             await channel.send(view=AsyncHandler.RaceInfoButtonView(self, race_id))
             await channel.send("`------------------------------------------------------------------------`")
         await interaction.send("Done")
+
+########################################################################################################################
+# VERIFY_RACE
+########################################################################################################################
+    @manage.subcommand(description="Prints information about a race for verification")
+    async def verify(self,
+                     interaction,
+                     race_id: int = nextcord.SlashOption(description="Race to Verify")):
+        self.log_command(interaction.user, "VERIFY_RACE")
+        race = self.get_race(race_id)
+        if race is not None:
+            roster = self.get_roster(race_id)
+            # For each assigned racer print: username, start date/time (race_info_time), submit date/time, IGT or RTA, VoD link
+            info_str = f"`|           Race Verification Info for race {race_id}            | `\n"
+
+            for r in roster:
+                user = self.get_user(r.user_id)
+                s = self.getSubmission(race_id, r.user_id)
+                start_time = "Not Started"
+                submit_time = "Not Completed"
+                game_time_str = "RTA" if config.RtaIsPrimary else "IGT"
+                vod_link = ""
+                game_time_cr = ""
+                if s is not None:
+                    start_time = r.race_info_time
+                    submit_time = s.submit_date
+                    vod_link = s.vod_link
+                    if config.RtaIsPrimary:
+                        game_time = s.finish_time_rta
+                    else:
+                        game_time = s.finish_time_igt
+                    if game_time == DnfTime:
+                        game_time_cr = "DNF"
+                    else:
+                        game_time_cr += f"{game_time} / {s.collection_rate}"
+                info_str += "`+==========================================================+`\n"
+                info_str += f"`| Racer Name:           |` **{user.username}**\n"
+                info_str += f"`| Start Date/Time:      |` {start_time}\n"
+                info_str += f"`| Submission Date/Time: |` {submit_time}\n"
+                info_str += f"`| VoD Link:             |` {vod_link}\n"
+                info_str += f"`| {game_time_str} / CR:             |` {game_time_cr}\n"
+            await interaction.send(info_str, ephemeral=True)
+        else:
+            await interaction.send(f"Race ID {race_id} does not exist", ephemeral=True)
+
 
 ########################################################################################################################
 ########################################################################################################################

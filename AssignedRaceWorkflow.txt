@@ -24,3 +24,6 @@ Racers can get the seed by using the same race info command from the async chann
 
 When all racers have completed the race, the results will be automatically posted by the bot. If a racer decides to forfeit and neglects to use the async_race info command and click the FF button, the race can be manually ended by a mod by using the end race command. This will fill in a FF for any racers who have not yet submitted a time and then post the results:
     `/async_race manage end 62
+
+Verification info for races, including start/completion times and VoD links can be viewed with:
+    `/async_race manage verify 62`
