@@ -64,6 +64,19 @@ FortyBonksTourneyInfo = ServerInfo(
     weekly_racer_role = 0,
     tourney_async_channel = 1018916661228740656)
 
+GmpServerInfo = ServerInfo(
+    server_id = 473911155924926490,
+    race_creator_role = 1029845711845597225,
+    weekly_submit_channel = 1029845151381717103,
+    weekly_category_id = 1,
+    tourney_submit_channel = 0,
+    race_creator_channel = 1029845151381717103,
+    bot_command_channels = [ 1029503160538108005,  ],
+    weekly_race_done_role = 629477791640977418,
+    weekly_leaderboard_channel = 1029845229840379948,
+    announcements_channel = 0,
+    weekly_racer_role = 631572574312202260,
+    tourney_async_channel = 0)
 
 SupportedServerList = [ BttServerInfo.server_id ]
 

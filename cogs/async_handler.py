@@ -16,11 +16,8 @@ DiscordApiCharLimit = 2000 - 10
 ItemsPerPage = 5
 
 # We use certain emojis and it's easier to refer to a variable name than use the emoji itself, particularly for the user specific ones
-PoopEmoji = '💩'
 ThumbsUpEmoji = '👍'
 ThumbsDownEmoji = '👎'
-ToiletPaperEmoji = '🧻'
-PendantPodEmoteStr = '<:laoPoD:809226000550199306>'
 
 # Define some canned messages that are used in multiple places by some bot features
 AlreadySubmittedMsg = "You've already submitted for this race, use the 'Edit Time' button to modify your submission"
@@ -55,9 +52,19 @@ def sort_game_time(submission):
         game_time = submission.finish_time_rta
     # Convert the time to seconds for sorting
     ret = 0
-    if game_time is not None:
+    if game_time is not None and game_time != '':
         parts = game_time.split(':')
-        ret = (3600 * int(parts[0])) + (60 * int(parts[1])) + int(parts[2])
+        hours = 0
+        mins = 0
+        sec = 0
+        if len(parts) == 3:
+            hours = int(parts[0])
+            min = int(parts[1])
+            sec = int(parts[2])
+        else:
+            min = int(parts[0])
+            sec = int(parts[1])
+        ret = (3600 * hours) + (60 * min) + sec
     return ret
 
 class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
@@ -67,13 +74,11 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         self.bot = bot
         self.test_mode = False
         # Once server info is defined, it should be set here as follows:
-        # self.server_info = FortyBonksServerInfo
+        self.server_info = GmpServerInfo
         if config.TEST_MODE:
             self.setTestMode()
         self.pt = PrettyTable()
         self.resetPrettyTable()
-        # Controls poop emoji cleanup behavior.
-        self.replace_poop_with_tp = False
 
     def setTestMode(self):
         self.test_mode = True
@@ -99,6 +104,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             self.race_id = race_id
             self.isWeeklyAsync = isWeeklyAsync
             self.submitType = submitType
+            self.user_id = None
 
             self.igt = nextcord.ui.TextInput(
                 label="Enter IGT in format `H:MM:SS`",
@@ -132,9 +138,16 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                     max_length=1024)
 
             if submitType is not AsyncHandler.SubmitType.FORFEIT:
-                self.add_item(self.igt)
+                if config.RtaIsPrimary:
+                    self.add_item(self.rta)
+                    if config.ShowSecondaryTimeField:
+                        self.add_item(self.igt)
+                else:
+                    self.add_item(self.igt)
+                    if config.ShowSecondaryTimeField:
+                        self.add_item(self.rta)
                 self.add_item(self.collection_rate)
-                self.add_item(self.rta)
+
             self.add_item(self.comment)
             if isWeeklyAsync and config.SuggestNextWeeklyMode:
                 self.add_item(self.next_mode)
@@ -156,7 +169,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             super().__init__("Add Race", timeout=None)
             self.start_race_callback = None
             self.race = race
-            self.category_id = None
+            self.category_id = None if race is None else race.category_id
 
             self.mode = nextcord.ui.TextInput(
                 label="Mode Description`",
@@ -205,6 +218,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             # Create the options list from the categories
             options = []
             for c in categories:
+                logging.info(f"Adding category {c.name}")
                 options.append(nextcord.SelectOption(label=c.name, description=c.description, value=str(c.id)))
 
             # Initialize the base class
@@ -488,7 +502,9 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
     # Checks that the user sending an interaction is both a race creator and sending the command from a race creator channel
     def checkRaceCreatorCommand(self, interaction):
-        return self.isRaceCreator(interaction.guild, interaction.user) and self.isRaceCreatorChannel(interaction.channel_id)
+        is_race_creator = self.isRaceCreator(interaction.guild, interaction.user)
+        logging.info(f"User is race creator: {is_race_creator}")
+        return is_race_creator and self.isRaceCreatorChannel(interaction.channel_id)
 
     ####################################################################################################################
     # Updates the Weekly Async Submit channel with the current race info and submit/ff/leaderboard buttons.
@@ -695,13 +711,24 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 leaderboard_str += f'\n    **Mode: {race.description}**'
                 leaderboard_str += "\n"
                 self.resetPrettyTable()
-                self.pt.field_names = ["#", "Name", "IGT", "RTA", "CR"]
+                if config.ShowSecondaryTimeField:
+                    self.pt.field_names = ["#", "Name", "IGT", "RTA", "CR"]
+                else:
+                    if config.RtaIsPrimary:
+                        self.pt.field_names = ["#", "Name", "RTA", "CR"]
+                    else:
+                        self.pt.field_names = ["#", "Name", "IGT", "CR"]
                 for idx, submission in enumerate(race_submissions):
-                    self.pt.add_row([idx+1,
-                                     submission.username,
-                                     "DNF" if submission.finish_time_igt == DnfTime else submission.finish_time_igt,
-                                     "DNF" if submission.finish_time_rta == DnfTime else submission.finish_time_rta,
-                                     submission.collection_rate])
+                    rowNum = idx+1
+                    igt_str = "DNF" if submission.finish_time_igt == DnfTime else submission.finish_time_igt
+                    rta_str = "DNF" if submission.finish_time_rta == DnfTime else submission.finish_time_rta
+                    if config.ShowSecondaryTimeField:
+                        self.pt.add_row([rowNum, submission.username, igt_str, rta_str, submission.collection_rate])
+                    else:
+                        if config.RtaIsPrimary:
+                            self.pt.add_row([rowNum, submission.username, rta_str, submission.collection_rate])
+                        else:
+                            self.pt.add_row([rowNum, submission.username, igt_str, submission.collection_rate])
 
             message_list = self.buildResponseMessageList(leaderboard_str)
             table_message_list = []
@@ -750,13 +777,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         racer, created = AsyncRacer.get_or_create(user_id = member.id, username = member.name, wheel_weight=1)
 
     ####################################################################################################################
-    # Checks if the provided emoji is a poop emoji....  sigh...
-    def isPoopEmoji(self, emoji):
-        if str(emoji) == PoopEmoji:
-            return True
-        else:
-            return False
-
     ####################################################################################################################
     # Retrieves a submission from the database based on race and user IDs. Returns None if no matching submission exists
     def getSubmission(self, race_id, user_id):
@@ -816,12 +836,13 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         if race is None or not race.active:
             await interaction.send(f"Error submitting time for race {race_id}. Race doesn't exist or is not active. Please notfiy the bot overlord(s)", ephemeral=True)
             return
-    
-        self.checkAddMember(interaction.user)
+
+        user = interaction.user if modal.user_id is None else self.get_user(modal.user_id)
 
         # Then check if the user has permission to submit to this race
-        if self.has_permission(race_id, interaction.user.id):
-            user_id = interaction.user.id
+        if user is not None and self.has_permission(race_id, user.id):
+            self.checkAddMember(user)
+            user_id = user.id
             igt = "" if modal.igt.value is None else modal.igt.value
             rta = "" if modal.rta.value is None else modal.rta.value
             cr_int = "216" if modal.collection_rate.value is None else modal.collection_rate.value
@@ -860,7 +881,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             submission = self.getSubmission(race_id, user_id)
             if submission is None:
                 # Create a brand new submission
-                submission = AsyncSubmission(race_id= race_id, user_id= user_id, username= interaction.user.name,
+                submission = AsyncSubmission(race_id= race_id, user_id= user_id, username= user.name,
                                              finish_time_igt= igt, collection_rate= cr_int, finish_time_rta=rta,
                                              comment=comment, next_mode=next_mode, vod_link=vod_link)
             else:
@@ -1136,7 +1157,12 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
     @async_race.subcommand(description="List Current Races")
     async def list(self, interaction):
         self.log_command(interaction.user, "RACES")
-        await interaction.send(view=AsyncHandler.CategorySelectView(self.list_races_first_impl, 1), ephemeral=True)
+        categoryCount = RaceCategory.select().count()
+        logging.info(f"Category Count: {categoryCount}")
+        if int(categoryCount) == 1:
+            await self.list_races_impl(interaction, AsyncHandler.RacesData(page=1, category=1))
+        else:
+            await interaction.send(view=AsyncHandler.CategorySelectView(self.list_races_first_impl, 1), ephemeral=True)
 
     ########################################################################################################################
     async def list_races_first_impl(self, interaction, category_id, page):
@@ -1215,9 +1241,9 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
         is_race_creator = self.isRaceCreator(interaction.guild, interaction.user)
         if race is None:
-            interaction.send(f"No race found for ID {race_id}", ephemeral=True)
+            await interaction.send(f"No race found for ID {race_id}", ephemeral=True)
         elif not race.active and not is_race_creator:
-            interaction.send(f"Race {race_id} is not yet active", ephemeral=True)
+            await interaction.send(f"Race {race_id} is not yet active", ephemeral=True)
         else:
             # Check if the user has permissions to view the race info. A user can view race info if any of the following:
             # A) It's a public race
@@ -1304,23 +1330,26 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
     ########################################################################################################################
     # Starts a race
-    async def start_race_impl(self, interaction, race_id, notify_racers):
+    async def start_race_impl(self, interaction, race_id, notify_racers=False):
         race = self.get_race(race_id)
         if race is not None:
-            # Search for race roster entries for this race
-            msg = ""
-            roster = self.get_roster(race_id)
-            if roster is None:
-                msg = f"Race ID {race_id} is currently set as a public race (no racers listed)"
+            if config.RosterPromptOnRaceStart:
+                # Search for race roster entries for this race
+                msg = ""
+                roster = self.get_roster(race_id)
+                if roster is None:
+                    msg = f"Race ID {race_id} is currently set as a public race (no racers listed)"
+                else:
+                    msg = f"Race ID {race_id} currently has the following racers assigned:"
+                    for r in roster:
+                        racer = AsyncRacer.select().where(AsyncRacer.user_id == r.user_id).get()
+                        msg += f"\n{racer.username}"
+                await interaction.send(msg, ephemeral=True)
+                # Show confirmation
+                confirm_view = AsyncHandler.YesNoView(self.start_race_impl2, (race, notify_racers))
+                await interaction.send(view=confirm_view, ephemeral=True)
             else:
-                msg = f"Race ID {race_id} currently has the following racers assigned:"
-                for r in roster:
-                    racer = AsyncRacer.select().where(AsyncRacer.user_id == r.user_id).get()
-                    msg += f"\n{racer.username}"
-            await interaction.send(msg, ephemeral=True)
-            # Show confirmation
-            confirm_view = AsyncHandler.YesNoView(self.start_race_impl2, (race, notify_racers))
-            await interaction.send(view=confirm_view, ephemeral=True)
+                await self.start_race_impl2(interaction, True, (race, notify_racers))
         else:
             await interaction.send(f"No race found for race ID {race_id}", ephemeral=True)
 
@@ -1387,8 +1416,12 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             add_race_modal = AsyncHandler.AddRaceModal()
             if start_race:
                 add_race_modal.start_race_callback = self.start_race_impl
-            add_race_view = AsyncHandler.AddRaceView(add_race_modal)
-            await interaction.send(view=add_race_view, ephemeral=True)
+            if RaceCategory.select().count() == 1:
+                add_race_modal.category_id = 1
+                await interaction.response.send_modal(add_race_modal)
+            else:
+                add_race_view = AsyncHandler.AddRaceView(add_race_modal)
+                await interaction.send(view=add_race_view, ephemeral=True)
         else:
             await interaction.send(NoPermissionMsg, ephemeral=True)
 
@@ -1535,39 +1568,46 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                      interaction,
                      race_id: int = nextcord.SlashOption(description="Race to Verify")):
         self.log_command(interaction.user, "VERIFY_RACE")
+        if self.is_public_race(race_id):
+            await interaction.send("Cannot verify a public (non-assigned) race", ephemeral=True)
+            return
+
         race = self.get_race(race_id)
         if race is not None:
             roster = self.get_roster(race_id)
-            # For each assigned racer print: username, start date/time (race_info_time), submit date/time, IGT or RTA, VoD link
-            info_str = f"`|           Race Verification Info for race {race_id}            | `\n"
+            if roster is not None:
+                # For each assigned racer print: username, start date/time (race_info_time), submit date/time, IGT or RTA, VoD link
+                info_str = f"`|           Race Verification Info for race {race_id}            | `\n"
 
-            for r in roster:
-                user = self.get_user(r.user_id)
-                s = self.getSubmission(race_id, r.user_id)
-                start_time = "Not Started"
-                submit_time = "Not Completed"
-                game_time_str = "RTA" if config.RtaIsPrimary else "IGT"
-                vod_link = ""
-                game_time_cr = ""
-                if s is not None:
-                    start_time = r.race_info_time
-                    submit_time = s.submit_date
-                    vod_link = s.vod_link
-                    if config.RtaIsPrimary:
-                        game_time = s.finish_time_rta
-                    else:
-                        game_time = s.finish_time_igt
-                    if game_time == DnfTime:
-                        game_time_cr = "DNF"
-                    else:
-                        game_time_cr += f"{game_time} / {s.collection_rate}"
-                info_str += "`+==========================================================+`\n"
-                info_str += f"`| Racer Name:           |` **{user.username}**\n"
-                info_str += f"`| Start Date/Time:      |` {start_time}\n"
-                info_str += f"`| Submission Date/Time: |` {submit_time}\n"
-                info_str += f"`| VoD Link:             |` {vod_link}\n"
-                info_str += f"`| {game_time_str} / CR:             |` {game_time_cr}\n"
-            await interaction.send(info_str, ephemeral=True)
+                for r in roster:
+                    user = self.get_user(r.user_id)
+                    s = self.getSubmission(race_id, r.user_id)
+                    start_time = "Not Started"
+                    submit_time = "Not Completed"
+                    game_time_str = "RTA" if config.RtaIsPrimary else "IGT"
+                    vod_link = ""
+                    game_time_cr = ""
+                    if s is not None:
+                        start_time = r.race_info_time
+                        submit_time = s.submit_date
+                        vod_link = s.vod_link
+                        if config.RtaIsPrimary:
+                            game_time = s.finish_time_rta
+                        else:
+                            game_time = s.finish_time_igt
+                        if game_time == DnfTime:
+                            game_time_cr = "DNF"
+                        else:
+                            game_time_cr += f"{game_time} / {s.collection_rate}"
+                    info_str += "`+==========================================================+`\n"
+                    info_str += f"`| Racer Name:           |` **{user.username}**\n"
+                    info_str += f"`| Start Date/Time:      |` {start_time}\n"
+                    info_str += f"`| Submission Date/Time: |` {submit_time}\n"
+                    info_str += f"`| VoD Link:             |` {vod_link}\n"
+                    info_str += f"`| {game_time_str} / CR:             |` {game_time_cr}\n"
+                await interaction.send(info_str, ephemeral=True)
+            else:
+                await interaction.send("No racers assigned to this race", ephemeral=True)
         else:
             await interaction.send(f"Race ID {race_id} does not exist", ephemeral=True)
 
@@ -1588,7 +1628,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
     @mod.subcommand(description="Mod Utilities")
     async def util(self,
                    interaction,
-                   function: int = nextcord.SlashOption(description="Utility Function to Run", choices = { "Force Update Leaderboard Channel": 1, "Toggle TP": 2, "Post Race Results": 3, "Notify Racers": 4}),
+                   function: int = nextcord.SlashOption(description="Utility Function to Run", choices = { "Force Update Leaderboard Channel": 1, "Post Race Results": 2, "Notify Racers": 3, "Add Submit Buttons": 4}),
                    race_id: int = nextcord.SlashOption(description="Race ID", required=False)):
 
         self.log_command(interaction.user, "MOD_UTIL")
@@ -1600,16 +1640,15 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             await self.updateLeaderboardMessage(self.queryLatestWeeklyRaceId(), interaction.guild)
             await interaction.send("Updated weekly leaderboard channel", ephemeral=True)
         elif function == 2:
-            self.replace_poop_with_tp = not self.replace_poop_with_tp
-            await interaction.send("Toilet paper replacement is now {}".format("Enabled" if self.replace_poop_with_tp else "Disabled"), ephemeral=True)
-        elif function == 3:
             race = self.get_race(race_id)
             if race is not None:
                 await self.post_results(race)
                 await interaction.send("Done")
-        elif function == 4:
+        elif function == 3:
             await self.notify_assigned_racers(race_id)
             await interaction.send("Done")
+        elif function == 4:
+            await self.add_submit_buttons()
 
 ########################################################################################################################
 # ADD_CATEGORY
@@ -1683,7 +1722,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             return
 
         await channel.send(text)
-        await interaction.send("Done")
+        await interaction.send("Done", ephemeral=True)
 
 ########################################################################################################################
 # EDIT_SUBMISSION
@@ -1709,6 +1748,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                                                              race.id,
                                                              (race.category_id == self.server_info.weekly_category_id),
                                                              AsyncHandler.SubmitType.EDIT)
+            submit_time_modal.user_id = submission_to_edit.user_id
             submit_time_modal.igt.default_value = submission_to_edit.finish_time_igt
             submit_time_modal.collection_rate.default_value = str(submission_to_edit.collection_rate)
             submit_time_modal.rta.default_value = submission_to_edit.finish_time_rta
@@ -1730,27 +1770,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 ########################################################################################################################
 
 ########################################################################################################################
-# ON_MESSAGE
-########################################################################################################################
-    #@commands.Cog.listener("on_message")
-    #async def message_handler(self, message):
-    #    if message.author == self.bot.user:
-    #        return
-    #
-    #    # Whenever a user mentions pendant pod, add Lao's emoji
-    #    if "pendant pod" in message.content.lower():
-    #        logging.info("adding pendant pod emoji")
-    #        guild = self.bot.get_guild(self.server_info.server_id)
-    #        emoji = None
-    #        for e in guild.emojis:
-    #            if str(e) == PendantPodEmoteStr:
-    #                emoji = e
-    #        if emoji is not None:
-    #            await message.add_reaction(emoji)
-    #
-    #    await self.bot.process_commands(message)
-
-########################################################################################################################
 # STARTUP and SHUTDOWN
 ########################################################################################################################
     @commands.Cog.listener("on_ready")
@@ -1760,7 +1779,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             logging.info("  Running in test mode")
         check_add_db_tables()
         await self.bot.sync_application_commands()
-        await self.add_submit_buttons()
 
     async def close(self):
         logging.info("Shutting down Async Handler")
@@ -1772,24 +1790,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         if self.server_info.tourney_submit_channel != 0:
             tourney_channel = self.bot.get_channel(self.server_info.tourney_submit_channel)
             await self.purge_bot_messages(tourney_channel)
-
-########################################################################################################################
-# REACTION ADD HANDLER
-########################################################################################################################
-    @commands.Cog.listener("on_raw_reaction_add")
-    async def reaction_add_handler(self, payload):
-        # There was a time that a server was being inundated by poop emojis on nearly every message. In an effort to
-        # dissuade this behavior this functionality was added to remove the poop emoji and replace it with a
-        # toilet paper one.
-        if self.replace_poop_with_tp:
-            if self.isPoopEmoji(payload.emoji):
-                logging.info("Cleaning up some poop")
-                guild = self.bot.get_guild(payload.guild_id)
-                channel = guild.get_channel(payload.channel_id)
-                message = await channel.fetch_message(payload.message_id)
-                await message.remove_reaction(payload.emoji, payload.member)
-                await message.add_reaction(ToiletPaperEmoji)
-
 
 def setup(bot):
     bot.add_cog(AsyncHandler(bot))

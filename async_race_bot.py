@@ -14,12 +14,13 @@ parser = argparse.ArgumentParser(description='Async Race Discord Bot')
 parser.add_argument('-test', '-t', action='store_true', help='Runs the bot in test mode')
 args = parser.parse_args(sys.argv[1:])
 
-bot_token = bot_tokens.PRODUCTION_TOKEN
-dbName = "AsyncRaceInfo.db"
+#bot_token = bot_tokens.PRODUCTION_TOKEN
+bot_token = bot_tokens.GMP_TOKEN
 test_mode = args.test == True or config.TEST_MODE
 if test_mode:
     logging.info("Setting test mode for BOT")
-    bot_token = bot_tokens.TEST_TOKEN
+    #bot_token = bot_tokens.TEST_TOKEN
+    bot_token = bot_tokens.GMP_TOKEN
 
 class Bot(commands.Bot):
     def __init__(self, **kwargs):
