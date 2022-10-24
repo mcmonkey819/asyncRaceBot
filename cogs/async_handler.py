@@ -9,7 +9,6 @@ from datetime import datetime, date
 from async_db_orm import *
 from enum import Enum
 import config
-from server_info import *
 
 # Discord limit is 2000 characters, subtract a few to account for formatting, newlines, etc
 DiscordApiCharLimit = 2000 - 10
@@ -74,7 +73,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         self.bot = bot
         self.test_mode = False
         # Once server info is defined, it should be set here as follows:
-        self.server_info = GmpServerInfo
+        self.server_info = config.PRODUCTION_SERVER
         if config.TEST_MODE:
             self.setTestMode()
         self.pt = PrettyTable()
@@ -82,7 +81,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
     def setTestMode(self):
         self.test_mode = True
-        self.server_info = BttServerInfo
+        self.server_info = config.TEST_SERVER
 
 ########################################################################################################################
 # UI Elements
@@ -156,7 +155,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
         async def callback(self, interaction: nextcord.Interaction) -> None:
             await self.asyncHandler.submit_time(self, interaction, self.race_id)
-            if self.isWeeklyAsync:
+            if self.asyncHandler.queryLatestWeeklyRaceId() == self.race_id:
                 await self.asyncHandler.assignWeeklyAsyncRole(interaction.guild, interaction.user)
 
     ########################################################################################################################
@@ -899,15 +898,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
 
             # Check if this submission completes the race
             if not self.is_public_race(race_id):
-                is_race_complete = True
-                # Query for the race roster
-                roster = self.get_roster(race.id)
-                # For each assigned racer see if there's a submission
-                for r in roster:
-                    if self.getSubmission(race.id, r.user_id) is None:
-                        # if anyone has not submitted, the race is not complete
-                        is_race_complete = False
-                        break
+                is_race_complete = self.is_race_complete(race)
                 # If all racers have now submitted, post the race results
                 if is_race_complete:
                     logging.info(f"race complete, posting results")
@@ -918,6 +909,27 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 await self.updateLeaderboardMessage(race_id, interaction.guild)
         else:
             await interaction.send("You are not assigned to this async race, submission cancelled")
+
+    ####################################################################################################################
+    # Checks if a race is complete. For assigned races, it is complete when all racers have submitted. For public races,
+    # a race is complete when it is no longer active
+    def is_race_complete(self, race):
+        if race is not None:
+            is_race_complete = True
+            if self.is_public_race(race.id):
+                is_race_complete = not race.active
+            else:
+                # Query for the race roster
+                roster = self.get_roster(race.id)
+                # For each assigned racer see if there's a submission
+                for r in roster:
+                    if self.getSubmission(race.id, r.user_id) is None:
+                        # if anyone has not submitted, the race is not complete
+                        is_race_complete = False
+                        break
+        else:
+            is_race_complete = False
+        return is_race_complete
 
     ####################################################################################################################
     # Returns a list of racers assigned to the provided race_id, or None if no racers are assigned
@@ -1266,6 +1278,63 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 await interaction.send("You do not have permission to view this race info in this channel", ephemeral=True)
 
 ########################################################################################################################
+# VERIFY_RACE
+########################################################################################################################
+    @async_race.subcommand(description="Prints information about a race for verification")
+    async def verify(self,
+                     interaction,
+                     race_id: int = nextcord.SlashOption(description="Race to Verify")):
+        self.log_command(interaction.user, "VERIFY_RACE")
+        if self.is_public_race(race_id):
+            await interaction.send("Cannot verify a public (non-assigned) race", ephemeral=True)
+            return
+
+        race = self.get_race(race_id)
+        if race is not None:
+            # Only allow race creators to use verify prior to race completion
+            if not self.is_race_complete(race):
+                if not self.isRaceCreator(interaction.user):
+                    await interaction.send(f"Non-race creators can only verify races once they are complete")
+                    return
+
+            roster = self.get_roster(race_id)
+            if roster is not None:
+                # For each assigned racer print: username, start date/time (race_info_time), submit date/time, IGT or RTA, VoD link
+                info_str = f"`|           Race Verification Info for race {race_id}            | `\n"
+
+                for r in roster:
+                    user = self.get_user(r.user_id)
+                    s = self.getSubmission(race_id, r.user_id)
+                    start_time = "Not Started"
+                    submit_time = "Not Completed"
+                    game_time_str = "RTA" if config.RtaIsPrimary else "IGT"
+                    vod_link = ""
+                    game_time_cr = ""
+                    if s is not None:
+                        start_time = r.race_info_time
+                        submit_time = s.submit_date
+                        vod_link = s.vod_link
+                        if config.RtaIsPrimary:
+                            game_time = s.finish_time_rta
+                        else:
+                            game_time = s.finish_time_igt
+                        if game_time == DnfTime:
+                            game_time_cr = "DNF"
+                        else:
+                            game_time_cr += f"{game_time} / {s.collection_rate}"
+                    info_str += "`+==========================================================+`\n"
+                    info_str += f"`| Racer Name:           |` **{user.username}**\n"
+                    info_str += f"`| Start Date/Time:      |` {start_time}\n"
+                    info_str += f"`| Submission Date/Time: |` {submit_time}\n"
+                    info_str += f"`| VoD Link:             |` {vod_link}\n"
+                    info_str += f"`| {game_time_str} / CR:             |` {game_time_cr}\n"
+                await interaction.send(info_str, ephemeral=True)
+            else:
+                await interaction.send("No racers assigned to this race", ephemeral=True)
+        else:
+            await interaction.send(f"Race ID {race_id} does not exist", ephemeral=True)
+
+########################################################################################################################
 ########################################################################################################################
 ######################    RACE MANAGEMENT SUBCOMMANDS    ###############################################################
 ########################################################################################################################
@@ -1559,58 +1628,6 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             await channel.send(view=AsyncHandler.RaceInfoButtonView(self, race_id))
             await channel.send("`------------------------------------------------------------------------`")
         await interaction.send("Done")
-
-########################################################################################################################
-# VERIFY_RACE
-########################################################################################################################
-    @manage.subcommand(description="Prints information about a race for verification")
-    async def verify(self,
-                     interaction,
-                     race_id: int = nextcord.SlashOption(description="Race to Verify")):
-        self.log_command(interaction.user, "VERIFY_RACE")
-        if self.is_public_race(race_id):
-            await interaction.send("Cannot verify a public (non-assigned) race", ephemeral=True)
-            return
-
-        race = self.get_race(race_id)
-        if race is not None:
-            roster = self.get_roster(race_id)
-            if roster is not None:
-                # For each assigned racer print: username, start date/time (race_info_time), submit date/time, IGT or RTA, VoD link
-                info_str = f"`|           Race Verification Info for race {race_id}            | `\n"
-
-                for r in roster:
-                    user = self.get_user(r.user_id)
-                    s = self.getSubmission(race_id, r.user_id)
-                    start_time = "Not Started"
-                    submit_time = "Not Completed"
-                    game_time_str = "RTA" if config.RtaIsPrimary else "IGT"
-                    vod_link = ""
-                    game_time_cr = ""
-                    if s is not None:
-                        start_time = r.race_info_time
-                        submit_time = s.submit_date
-                        vod_link = s.vod_link
-                        if config.RtaIsPrimary:
-                            game_time = s.finish_time_rta
-                        else:
-                            game_time = s.finish_time_igt
-                        if game_time == DnfTime:
-                            game_time_cr = "DNF"
-                        else:
-                            game_time_cr += f"{game_time} / {s.collection_rate}"
-                    info_str += "`+==========================================================+`\n"
-                    info_str += f"`| Racer Name:           |` **{user.username}**\n"
-                    info_str += f"`| Start Date/Time:      |` {start_time}\n"
-                    info_str += f"`| Submission Date/Time: |` {submit_time}\n"
-                    info_str += f"`| VoD Link:             |` {vod_link}\n"
-                    info_str += f"`| {game_time_str} / CR:             |` {game_time_cr}\n"
-                await interaction.send(info_str, ephemeral=True)
-            else:
-                await interaction.send("No racers assigned to this race", ephemeral=True)
-        else:
-            await interaction.send(f"Race ID {race_id} does not exist", ephemeral=True)
-
 
 ########################################################################################################################
 ########################################################################################################################

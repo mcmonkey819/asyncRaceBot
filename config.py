@@ -1,6 +1,11 @@
+from server_info import *
+
 # Names of the production and test databases to use
 PRODUCTION_DB = "GmpRaceInfo.db"
 TEST_DB = "testDbUtil.db"
+
+PRODUCTION_SERVER = GmpServerInfo
+TEST_SERVER = BttServerInfo
 
 # Controls whether the bot will start in test mode
 TEST_MODE = False
