@@ -705,7 +705,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                 if self.is_public_race(race_id):
                     leaderboard_str += started_on_str
             else:
-                leaderboard_str = f'Results for race {race_id} which started on {race.start}'
+                leaderboard_str = f'Results for race {race_id} '
                 if self.is_public_race(race_id):
                     leaderboard_str += started_on_str
                 leaderboard_str += f'\n    **Mode: {race.description}**'
@@ -1649,6 +1649,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             await interaction.send("Done")
         elif function == 4:
             await self.add_submit_buttons()
+        await interaction.send("Done", ephemeral=True)
 
 ########################################################################################################################
 # ADD_CATEGORY
