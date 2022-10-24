@@ -999,10 +999,13 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
     # Returns True if all assigned racers for the given race_id have submmissions, or if the race is public
     def is_race_complete(self, race_id):
         race_complete = True
-        if not is_public_race(race_id):
+        if not self.is_public_race(race_id):
             roster = self.get_roster(race_id)
             for r in roster:
-                s = AsyncSubmission.select().where(AsyncSubmission.race_id == race_id & AsyncSubmission.user_id == r.user_id).get()
+                try:
+                    s = AsyncSubmission.select().where(AsyncSubmission.race_id == race_id & AsyncSubmission.user_id == r.user_id).get()
+                except:
+                    s = None
                 if s is None:
                     race_complete = False
                     break
@@ -1293,7 +1296,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
         if race is not None:
             # Only allow race creators to use verify prior to race completion
             if not self.is_race_complete(race):
-                if not self.isRaceCreator(interaction.user):
+                if not self.isRaceCreator(interaction.guild, interaction.user):
                     await interaction.send(f"Non-race creators can only verify races once they are complete")
                     return
 
