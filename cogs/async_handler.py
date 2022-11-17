@@ -849,6 +849,10 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
             next_mode = modal.next_mode.value
             vod_link = modal.vod_link.value
 
+            if modal.submitType is AsyncHandler.SubmitType.FORFEIT:
+                igt = DnfTime
+                rta = DnfTime
+
             # A parse_error occurred if a required time is missing or an invalid non-empty time is submitted
             parse_error = False
             if config.RtaIsPrimary:
@@ -857,7 +861,7 @@ class AsyncHandler(commands.Cog, name='AsyncRaceHandler'):
                     return
             else:
                 if igt == "":
-                    await interaction.send("Missing required RTA time", ephemeral=True)
+                    await interaction.send("Missing required IGT time", ephemeral=True)
                     return
 
             parse_error = not self.game_time_is_valid(igt)

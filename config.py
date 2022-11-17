@@ -8,7 +8,7 @@ PRODUCTION_SERVER = GmpServerInfo
 TEST_SERVER = BttServerInfo
 
 # Controls whether the bot will start in test mode
-TEST_MODE = False
+TEST_MODE = True
 
 # Controls whether leaderboards should be sorted by IGT or RTA
 RtaIsPrimary = False

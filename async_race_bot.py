@@ -18,8 +18,7 @@ bot_token = bot_tokens.PRODUCTION_TOKEN
 test_mode = args.test == True or config.TEST_MODE
 if test_mode:
     logging.info("Setting test mode for BOT")
-    #bot_token = bot_tokens.TEST_TOKEN
-    bot_token = bot_tokens.GMP_TOKEN
+    bot_token = bot_tokens.TEST_TOKEN
 
 class Bot(commands.Bot):
     def __init__(self, **kwargs):
@@ -43,6 +42,7 @@ intents.members = True
 bot = Bot(intents=intents)
 if test_mode:
     server_utils_cog = bot.get_cog('ServerUtils')
-    server_utils_cog.setTestMode()
+    if server_utils_cog is not None:
+        server_utils_cog.setTestMode()
 bot.run(bot_token)
 
